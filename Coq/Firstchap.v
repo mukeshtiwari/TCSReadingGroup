@@ -1,7 +1,7 @@
 Require Import ssreflect ssrbool ssrfun.
-From mathcomp Require Import eqtype ssrnat fintype finset.
-Require Lists.List.
-Require Lists.ListSet.
+From mathcomp Require Import eqtype ssrnat fintype finset. 
+From mathcomp Require Import all_ssreflect.
+ 
 
 Notation "'existsT' x .. y , p" :=
   (sigT (fun x => .. (sigT (fun y => p)) ..))
@@ -13,7 +13,7 @@ Module First.
   Import List.
   Import ListNotations.
   
-  Section Verification.
+  Section Verification.    
     (* State is finite type. I am wondering if writing 
        Variable S : finType would make it more prettier *)
     Variable S : Type.
@@ -42,6 +42,7 @@ Module First.
         Hf : forall x, ListSet.set_In x Fs -> ListSet.set_In x Qs
       }. *)
 
+    
     Record Automata :=
       {
         Qs : pred S;
@@ -209,37 +210,72 @@ Module First.
       apply sipser_accept_more_general. auto.
     Qed.
 
-    
-    (*  Langauge is predicate over Prop *)
-    Definition language := pred word.
 
-    (* a machine m recognizes a langauge l if machine accepts 
-       every word in langauge *)
-    Definition machine_recog_langauge (m : Automata) (l : language) :=
-      forall w, l w -> machine_accept m w = true.
-
+    (* Working with decidable langauge. 
+       https://www.ps.uni-saarland.de/Publications/documents/DoczkalEtAl_2013_A-Constructive.pdf
+       https://github.com/smolkaj/coq-netkat/blob/master/Automata.v
+       https://github.com/chdoc/coq-reglang/blob/master/theories/dfa.v
+       http://kilby.stanford.edu/~rvg/154/handouts/decidability.html
+     *)
     
-    (* A language l is regular if there exists a machine which 
-       recognizes it *)
-    Definition regular_language (l : language) :=
-      existsT (m : Automata), machine_recog_langauge m l.
+    Definition language := pred word. 
 
-    
-    (* decidability of words *)
-    Lemma dec_word : forall w1 w2 : word, {w1 = w2} + {w1 <> w2}.
+    (* Automaton accepts lanauge l *)
+    Definition machine_recog_language (m : Automata) (l : language) :=
+      forall w, l w = true -> machine_accept m w.
+
+    (* Among decidable lanagues, lanaguage l is regular if 
+       there exists a automaton which accepts it *)
+    Definition regular_lang (l : language) :=
+      exists (m : Automata), machine_recog_language m l.
+
+    (* is it possible to decide that among decidable lanaguges, 
+       if the language is regular or not ? *)
+
+    Lemma regular_decidable :
+      forall (l : language), regular_lang l +  ~ regular_lang l.
     Proof.
-      intros w1 w2.
-      pose proof (list_eq_dec Hadec w1 w2); try assumption.
+      (* The proof sketch would be 
+         regular < context free < decidable < Turing recognizable *)
+    Admitted.
+
+    (* The definition above is way to go, but let's take a short cut
+       and define regular language as boolean function *)
+    Definition reg_lang := pred word. 
+    
+    Definition union_reg_lang (L1 L2 : reg_lang) :=
+      fun (v : word) => orb (L1 v) (L2 v).
+    
+    Definition concat_reg_lang (L1 L2 : reg_lang) :=
+      fun (v : word) => [exists n : 'I_(size v).+1, L1 (take n v) && L2 (drop n v)].
+
+    (* Proof of correctness about concat 
+       http://www.ps.uni-saarland.de/~doczkal/regular/html/regexp.html#lab1 *)
+    Lemma concatP : forall (L1 L2 : reg_lang) (w : word),
+        reflect (exists w1 w2, w = w1 ++ w2 /\  L1 w1 /\ L2 w2)
+                (concat_reg_lang L1 L2 w).
+    Proof.
+      intros L1 L2 w.
+      apply (iffP existsP) => [[n] /andP [H1 H2] | [w1] [w2] [e [H1 H2]]].
+      - exists (take n w). exists (drop n w). 
+        split. symmetry. eapply cat_take_drop.
+        auto. 
+      - have lt_w1: size w1 < (size w).+1 by rewrite e size_cat ltnS leq_addr.
+        exists (Ordinal lt_w1); subst.
+        rewrite take_size_cat // drop_size_cat //. exact/andP.
     Qed.
 
-    (* Now the question is, can we write boolean decision 
-       procedure to decide if a language is regular or not ?. 
-       Pumping Lemma because non-regular langauges are not 
-       pumpable. *)
-    (*
-    Lemma regular_language_dec :
-      forall (l : language), regular_language l +
-                        ~regular_language l. *)
+    
+    Definition residual x  (L : reg_lang) : pred word :=
+      [pred w | x :: w \in L].
+
+    
+   
+
+    
+    
+    
+    
 
     
    
@@ -387,8 +423,6 @@ Module First.
     End Ex2.
 
 End First.
-  
-    
 
   
   
